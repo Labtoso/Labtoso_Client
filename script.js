@@ -69,7 +69,7 @@ function setUnavailable(message) {
 	if (downloadButton) {
 		downloadButton.textContent = "Download nicht verfuegbar";
 		downloadButton.disabled = true;
-		downloadButton.title = message;
+		downloadButton.title = "";
 	}
 	if (latestVersion) {
 		latestVersion.textContent = "Keine Latest-Release-Version verfuegbar";
@@ -92,7 +92,7 @@ function setReadyDownload(downloadUrl, fileName, version) {
 	if (downloadButton) {
 		downloadButton.textContent = buttonLabel;
 		downloadButton.disabled = false;
-		downloadButton.title = `Quelle: ${fileName}`;
+		downloadButton.title = "";
 	}
 
 	if (latestVersion) {
