@@ -1,10 +1,50 @@
-const MANIFEST_PATH = "Client Versions/versions.json";
+const MANIFEST_PATH = "Downloads/versions.json";
 let latestDownloadUrl = "";
 let latestDownloadFile = "";
 
-const latestVersionLabel = document.getElementById("latestVersionLabel");
 const downloadButton = document.getElementById("downloadButton");
-const downloadHint = document.getElementById("downloadHint");
+const mouseGlow = document.querySelector(".mouse-glow");
+
+const prefersHover = window.matchMedia("(hover: hover)").matches;
+
+let targetX = window.innerWidth / 2;
+let targetY = window.innerHeight / 2;
+let currentX = targetX;
+let currentY = targetY;
+let rafId = 0;
+
+function renderGlow() {
+	currentX += (targetX - currentX) * 0.09;
+	currentY += (targetY - currentY) * 0.09;
+
+	if (mouseGlow) {
+		mouseGlow.style.transform = `translate3d(${currentX - 160}px, ${currentY - 160}px, 0)`;
+	}
+
+	rafId = window.requestAnimationFrame(renderGlow);
+}
+
+if (mouseGlow && prefersHover) {
+	mouseGlow.style.opacity = "1";
+	window.addEventListener("pointermove", (event) => {
+		targetX = event.clientX;
+		targetY = event.clientY;
+	});
+
+	window.addEventListener("pointerleave", () => {
+		if (mouseGlow) {
+			mouseGlow.style.opacity = "0";
+		}
+	});
+
+	window.addEventListener("pointerenter", () => {
+		if (mouseGlow) {
+			mouseGlow.style.opacity = "1";
+		}
+	});
+
+	renderGlow();
+}
 
 function parseVersion(version) {
 	return String(version)
@@ -12,6 +52,22 @@ function parseVersion(version) {
 		.replace(/^v/i, "")
 		.split(".")
 		.map((part) => Number.parseInt(part, 10) || 0);
+}
+
+function extractVersionFromFileName(fileName) {
+	const match = String(fileName).match(/(\d+(?:\.\d+)+)/);
+	return match ? match[1] : "";
+}
+
+function extractReleaseLabelFromFileName(fileName) {
+	const lowerName = String(fileName).toLowerCase();
+	if (lowerName.includes("snapshot")) {
+		return "Snapshot";
+	}
+	if (lowerName.includes("final")) {
+		return "Final";
+	}
+	return "";
 }
 
 function compareVersions(a, b) {
@@ -36,18 +92,12 @@ function encodePathSegments(path) {
 }
 
 function setUnavailable(message) {
-	if (latestVersionLabel) {
-		latestVersionLabel.textContent = "Keine gueltige Version gefunden";
-	}
 	if (downloadButton) {
 		downloadButton.textContent = "Download nicht verfuegbar";
 		downloadButton.disabled = true;
 	}
 	latestDownloadUrl = "";
 	latestDownloadFile = "";
-	if (downloadHint) {
-		downloadHint.textContent = message;
-	}
 }
 
 async function initDownload() {
@@ -60,40 +110,43 @@ async function initDownload() {
 		const data = await response.json();
 		const versions = Array.isArray(data.versions) ? data.versions : [];
 
-		const validVersions = versions.filter((entry) =>
-			entry && typeof entry.version === "string" && typeof entry.file === "string"
-		);
+		const normalizedVersions = versions
+			.filter((entry) => entry && typeof entry.file === "string")
+			.map((entry) => {
+				const versionFromFile = extractVersionFromFileName(entry.file);
+				const version = typeof entry.version === "string" && entry.version.trim()
+					? entry.version.trim()
+					: versionFromFile;
 
-		if (validVersions.length === 0) {
-			setUnavailable("Bitte trage in Client Versions/versions.json mindestens eine Version ein.");
+				return {
+					...entry,
+					version,
+				};
+			})
+			.filter((entry) => entry.version);
+
+		if (normalizedVersions.length === 0) {
+			setUnavailable("Bitte trage in Downloads/versions.json mindestens eine Version ein.");
 			return;
 		}
 
-		const latest = validVersions.sort((left, right) =>
+		const latest = normalizedVersions.sort((left, right) =>
 			compareVersions(right.version, left.version)
 		)[0];
 
-		const safeHref = `Client Versions/${encodePathSegments(latest.file)}`;
+		const safeHref = `Downloads/${encodePathSegments(latest.file)}`;
 		const latestVersion = latest.version.trim();
+		const releaseLabel = extractReleaseLabelFromFileName(latest.file);
+		const buttonLabel = releaseLabel ? `v${latestVersion} ${releaseLabel} herunterladen` : `v${latestVersion} herunterladen`;
 
-		if (latestVersionLabel) {
-			latestVersionLabel.textContent = `Latest Release: v${latestVersion}`;
-		}
 		if (downloadButton) {
-			downloadButton.textContent = `v${latestVersion} herunterladen`;
+			downloadButton.textContent = buttonLabel;
 			downloadButton.disabled = false;
 		}
 		latestDownloadUrl = safeHref;
 		latestDownloadFile = latest.file;
-		if (downloadHint) {
-			if (latest.notes) {
-				downloadHint.textContent = String(latest.notes);
-			} else {
-				downloadHint.textContent = "Der Button erkennt die hoechste Version automatisch aus versions.json.";
-			}
-		}
 	} catch (error) {
-		setUnavailable("Manifest nicht gefunden. Erstelle Client Versions/versions.json und starte die Seite mit einem lokalen Webserver.");
+		setUnavailable("Manifest nicht gefunden. Erstelle Downloads/versions.json und starte die Seite mit einem lokalen Webserver.");
 	}
 }
 

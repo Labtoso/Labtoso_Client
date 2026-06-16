@@ -4,32 +4,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Labtoso Client</title>
-  <meta name="description" content="Offizielle Labtoso Client Website mit automatischem Download der neuesten Version.">
+  <meta name="description" content="Labtoso Client">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="assets/icon.png" type="image/png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div class="mouse-glow" aria-hidden="true"></div>
   <main class="app">
     <header class="hero">
-      <p class="hero-kicker">LABTOSO CLIENT</p>
-      <p class="hero-copy">
-      </p>
+      <div class="hero-brand">
+        <img class="hero-icon" src="assets/icon.png" alt="Labtoso Client Icon" width="72" height="72">
+        <h1>Labtoso Client</h1>
+      </div>
     </header>
 
     <section class="download-panel" id="download">
-      <p class="panel-label">Latest Release</p>
-      <p id="latestVersionLabel" class="latest">Suche neueste Version...</p>
-
+      <p class="download-label">Download</p>
       <button id="downloadButton" type="button" disabled>Download wird vorbereitet...</button>
-
-      <p id="downloadHint" class="hint">
-        Der Button nimmt automatisch die hoechste Version in versions.json (z. B. 1.1.21 kleiner als 1.1.22).
-      </p>
     </section>
 
-    <p class="footer-note">Labtoso Client - Official Download</p>
+    <section class="about-panel">
+      <p class="panel-label">Über den Client</p>
+      <div class="about-content" aria-label="Über den Client Bereich">
+        <div class="about-locked">
+          <div class="about-lock">🔒</div>
+          <p class="about-soon">Coming soon!</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer-note">© Labtoso 2026</p>
   </main>
 
   <script src="script.js" defer></script>
