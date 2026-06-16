@@ -1,8 +1,11 @@
-const MANIFEST_PATH = "Downloads/versions.json";
+const GITHUB_OWNER = "Labtoso";
+const GITHUB_REPO = "Labtoso_Client";
+const RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 let latestDownloadUrl = "";
 let latestDownloadFile = "";
 
 const downloadButton = document.getElementById("downloadButton");
+const latestVersion = document.getElementById("latestVersion");
 const mouseGlow = document.querySelector(".mouse-glow");
 
 const prefersHover = window.matchMedia("(hover: hover)").matches;
@@ -46,14 +49,6 @@ if (mouseGlow && prefersHover) {
 	renderGlow();
 }
 
-function parseVersion(version) {
-	return String(version)
-		.trim()
-		.replace(/^v/i, "")
-		.split(".")
-		.map((part) => Number.parseInt(part, 10) || 0);
-}
-
 function extractVersionFromFileName(fileName) {
 	const match = String(fileName).match(/(\d+(?:\.\d+)+)/);
 	return match ? match[1] : "";
@@ -70,83 +65,100 @@ function extractReleaseLabelFromFileName(fileName) {
 	return "";
 }
 
-function compareVersions(a, b) {
-	const av = parseVersion(a);
-	const bv = parseVersion(b);
-	const maxLength = Math.max(av.length, bv.length);
-
-	for (let i = 0; i < maxLength; i += 1) {
-		const left = av[i] ?? 0;
-		const right = bv[i] ?? 0;
-		if (left > right) return 1;
-		if (left < right) return -1;
-	}
-	return 0;
-}
-
-function encodePathSegments(path) {
-	return path
-		.split("/")
-		.map((segment) => encodeURIComponent(segment))
-		.join("/");
-}
-
 function setUnavailable(message) {
 	if (downloadButton) {
 		downloadButton.textContent = "Download nicht verfuegbar";
 		downloadButton.disabled = true;
+		downloadButton.title = message;
+	}
+	if (latestVersion) {
+		latestVersion.textContent = "Keine Latest-Release-Version verfuegbar";
 	}
 	latestDownloadUrl = "";
 	latestDownloadFile = "";
 }
 
+function buildButtonLabel(version, releaseLabel) {
+	return releaseLabel
+		? `v${version} ${releaseLabel} herunterladen`
+		: `v${version} herunterladen`;
+}
+
+function setReadyDownload(downloadUrl, fileName, version) {
+	const releaseLabel = extractReleaseLabelFromFileName(fileName);
+	const buttonLabel = buildButtonLabel(version, releaseLabel);
+	const versionLabel = releaseLabel ? `v${version} ${releaseLabel}` : `v${version}`;
+
+	if (downloadButton) {
+		downloadButton.textContent = buttonLabel;
+		downloadButton.disabled = false;
+		downloadButton.title = `Quelle: ${fileName}`;
+	}
+
+	if (latestVersion) {
+		latestVersion.textContent = `Aktuelle Version: ${versionLabel}`;
+	}
+
+	latestDownloadUrl = downloadUrl;
+	latestDownloadFile = fileName;
+}
+
+async function loadFromLatestGitHubRelease() {
+	const response = await fetch(RELEASES_API, { cache: "no-store" });
+	if (!response.ok) {
+		throw new Error("release_unavailable");
+	}
+
+	const release = await response.json();
+	const releaseTagVersion = extractVersionFromFileName(release.tag_name || "");
+
+	const assets = Array.isArray(release.assets) ? release.assets : [];
+	const exeEntries = assets
+		.filter((asset) =>
+			asset &&
+			typeof asset.name === "string" &&
+			typeof asset.browser_download_url === "string" &&
+			typeof asset.updated_at === "string" &&
+			asset.name.toLowerCase().endsWith(".exe")
+		)
+		.map((asset) => {
+			const versionFromFile = extractVersionFromFileName(asset.name);
+			const version = versionFromFile || releaseTagVersion;
+
+			return {
+				file: asset.name,
+				downloadUrl: asset.browser_download_url,
+				version,
+				updatedAt: asset.updated_at,
+			};
+		})
+		.filter((entry) => entry.version);
+
+	if (!exeEntries.length) {
+		throw new Error("no_release_exe");
+	}
+
+	const latest = [...exeEntries].sort(
+		(left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+	)[0];
+
+	if (!latest) {
+		throw new Error("no_release_exe");
+	}
+
+	return latest;
+}
+
 async function initDownload() {
 	try {
-		const response = await fetch(MANIFEST_PATH, { cache: "no-store" });
-		if (!response.ok) {
-			throw new Error("Manifest konnte nicht geladen werden.");
-		}
-
-		const data = await response.json();
-		const versions = Array.isArray(data.versions) ? data.versions : [];
-
-		const normalizedVersions = versions
-			.filter((entry) => entry && typeof entry.file === "string")
-			.map((entry) => {
-				const versionFromFile = extractVersionFromFileName(entry.file);
-				const version = typeof entry.version === "string" && entry.version.trim()
-					? entry.version.trim()
-					: versionFromFile;
-
-				return {
-					...entry,
-					version,
-				};
-			})
-			.filter((entry) => entry.version);
-
-		if (normalizedVersions.length === 0) {
-			setUnavailable("Bitte trage in Downloads/versions.json mindestens eine Version ein.");
-			return;
-		}
-
-		const latest = normalizedVersions.sort((left, right) =>
-			compareVersions(right.version, left.version)
-		)[0];
-
-		const safeHref = `Downloads/${encodePathSegments(latest.file)}`;
-		const latestVersion = latest.version.trim();
-		const releaseLabel = extractReleaseLabelFromFileName(latest.file);
-		const buttonLabel = releaseLabel ? `v${latestVersion} ${releaseLabel} herunterladen` : `v${latestVersion} herunterladen`;
-
-		if (downloadButton) {
-			downloadButton.textContent = buttonLabel;
-			downloadButton.disabled = false;
-		}
-		latestDownloadUrl = safeHref;
-		latestDownloadFile = latest.file;
-	} catch (error) {
-		setUnavailable("Manifest nicht gefunden. Erstelle Downloads/versions.json und starte die Seite mit einem lokalen Webserver.");
+		const latestRelease = await loadFromLatestGitHubRelease();
+		setReadyDownload(
+			latestRelease.downloadUrl,
+			latestRelease.file,
+			latestRelease.version.trim()
+		);
+	} catch {
+		setUnavailable("Kein gueltiges Latest Release mit EXE gefunden. Bitte in GitHub ein Latest Release mit EXE-Asset veroeffentlichen.");
 	}
 }
 
